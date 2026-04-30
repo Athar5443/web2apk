@@ -1,4 +1,6 @@
 <resources>
-    <!-- Placeholder for dynamic app name -->
     <string name="app_name">{{APP_NAME}}</string>
+    <string name="error_connection">Connection Error</string>
+    <string name="retry">Tap to Retry</string>
+    <string name="downloading">Downloading file...</string>
 </resources>
