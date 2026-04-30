@@ -1,0 +1,12 @@
+# Local API directory
+api/
+
+# Gradle
+.gradle/
+build/
+app/build/
+local.properties
+
+# IDE
+.idea/
+*.iml
