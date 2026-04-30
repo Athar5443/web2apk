@@ -1,0 +1,4 @@
+<resources>
+    <!-- Placeholder for dynamic app name -->
+    <string name="app_name">{{APP_NAME}}</string>
+</resources>
