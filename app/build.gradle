@@ -20,9 +20,9 @@ android {
         release {
             if (file("keystore.jks").exists()) {
                 storeFile file("keystore.jks")
-                storePassword "web2apk"
-                keyAlias "web2apk"
-                keyPassword "web2apk"
+                storePassword "{{KEYSTORE_PASSWORD}}"
+                keyAlias "{{KEY_ALIAS}}"
+                keyPassword "{{KEY_PASSWORD}}"
             }
         }
     }
