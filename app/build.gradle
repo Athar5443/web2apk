@@ -18,12 +18,10 @@ android {
 
     signingConfigs {
         release {
-            if (file("keystore.jks").exists()) {
-                storeFile file("keystore.jks")
-                storePassword "{{KEYSTORE_PASSWORD}}"
-                keyAlias "{{KEY_ALIAS}}"
-                keyPassword "{{KEY_PASSWORD}}"
-            }
+            storeFile file("keystore.jks")
+            storePassword "{{KEYSTORE_PASSWORD}}"
+            keyAlias "{{KEY_ALIAS}}"
+            keyPassword "{{KEY_PASSWORD}}"
         }
     }
 
@@ -36,6 +34,7 @@ android {
         }
         debug {
             minifyEnabled false
+            signingConfig signingConfigs.debug
         }
     }
     compileOptions {
