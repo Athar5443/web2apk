@@ -91,11 +91,9 @@ public class MainActivity extends AppCompatActivity {
 
         setupWebView();
 
-        swipeRefreshLayout.setColorSchemeResources(
-            android.R.color.holo_blue_bright,
-            android.R.color.holo_green_light,
-            android.R.color.holo_orange_light,
-            android.R.color.holo_red_light
+        // Sleek Minimalist Spinner Color
+        swipeRefreshLayout.setColorSchemeColors(
+            ContextCompat.getColor(this, android.R.color.darker_gray)
         );
         swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
 
