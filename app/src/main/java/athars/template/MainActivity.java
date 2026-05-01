@@ -15,6 +15,7 @@ import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -32,6 +33,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -45,7 +48,13 @@ public class MainActivity extends AppCompatActivity {
 
     private ValueCallback<Uri[]> uploadMessage;
     private final static int FILECHOOSER_RESULTCODE = 1;
-    private final static int PERMISSION_REQUEST_CODE = 1234;
+    
+    // JIT Permission Variables
+    private final static int GEO_PERMISSION_REQUEST_CODE = 1001;
+    private final static int WEBRTC_PERMISSION_REQUEST_CODE = 1002;
+    private GeolocationPermissions.Callback mGeoLocationCallback;
+    private String mGeoLocationOrigin;
+    private PermissionRequest mPermissionRequest;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -61,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
         btnRetry = findViewById(R.id.btnRetry);
 
         setupWebView();
-        requestPermissionsIfNeeded();
+        // Upfront permissions removed for JIT!
 
         swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
 
@@ -167,10 +176,42 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             }
 
-            // For Geolocation
+            // For Geolocation (JIT)
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                callback.invoke(origin, true, false);
+                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    mGeoLocationCallback = callback;
+                    mGeoLocationOrigin = origin;
+                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, GEO_PERMISSION_REQUEST_CODE);
+                } else {
+                    callback.invoke(origin, true, false);
+                }
+            }
+
+            // For WebRTC Camera/Mic (JIT)
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                mPermissionRequest = request;
+                List<String> requestedPermissions = new ArrayList<>();
+                
+                for (String resource : request.getResources()) {
+                    if (resource.equals(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+                        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                            requestedPermissions.add(Manifest.permission.CAMERA);
+                        }
+                    } else if (resource.equals(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                            requestedPermissions.add(Manifest.permission.RECORD_AUDIO);
+                        }
+                    }
+                }
+
+                if (!requestedPermissions.isEmpty()) {
+                    ActivityCompat.requestPermissions(MainActivity.this, requestedPermissions.toArray(new String[0]), WEBRTC_PERMISSION_REQUEST_CODE);
+                } else {
+                    // All needed Android permissions are already granted, grant the web request immediately
+                    request.grant(request.getResources());
+                }
             }
         });
 
@@ -195,23 +236,33 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void requestPermissionsIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            String[] permissions = {
-                Manifest.permission.CAMERA,
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            };
-            boolean needRequest = false;
-            for (String p : permissions) {
-                if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                    needRequest = true;
-                    break;
-                }
+    // Handle JIT Permission Results
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == GEO_PERMISSION_REQUEST_CODE) {
+            if (mGeoLocationCallback != null) {
+                boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+                mGeoLocationCallback.invoke(mGeoLocationOrigin, granted, false);
+                mGeoLocationCallback = null;
+                mGeoLocationOrigin = null;
             }
-            if (needRequest) {
-                ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE);
+        } else if (requestCode == WEBRTC_PERMISSION_REQUEST_CODE) {
+            if (mPermissionRequest != null) {
+                boolean allGranted = true;
+                for (int result : grantResults) {
+                    if (result != PackageManager.PERMISSION_GRANTED) {
+                        allGranted = false;
+                        break;
+                    }
+                }
+                if (allGranted) {
+                    mPermissionRequest.grant(mPermissionRequest.getResources());
+                } else {
+                    mPermissionRequest.deny();
+                }
+                mPermissionRequest = null;
             }
         }
     }
