@@ -7,11 +7,14 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.GeolocationPermissions;
@@ -39,6 +42,7 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
+    private WebView popupWebView; // Tracks active popup window
     private ProgressBar progressBar;
     private SwipeRefreshLayout swipeRefreshLayout;
     private LinearLayout errorLayout;
@@ -52,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
     // JIT Permission Variables
     private final static int GEO_PERMISSION_REQUEST_CODE = 1001;
     private final static int WEBRTC_PERMISSION_REQUEST_CODE = 1002;
+    private final static int NOTIFICATION_PERMISSION_REQUEST_CODE = 1003;
     private GeolocationPermissions.Callback mGeoLocationCallback;
     private String mGeoLocationOrigin;
     private PermissionRequest mPermissionRequest;
@@ -70,7 +75,6 @@ public class MainActivity extends AppCompatActivity {
         btnRetry = findViewById(R.id.btnRetry);
 
         setupWebView();
-        // Upfront permissions removed for JIT!
 
         swipeRefreshLayout.setColorSchemeResources(
             android.R.color.holo_blue_bright,
@@ -89,6 +93,12 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl(TARGET_URL);
     }
 
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetworkInfo = connectivityManager != null ? connectivityManager.getActiveNetworkInfo() : null;
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
         WebSettings webSettings = webView.getSettings();
@@ -99,9 +109,15 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setSupportZoom(true);
         webSettings.setBuiltInZoomControls(true);
         webSettings.setDisplayZoomControls(false);
-        webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
         webSettings.setAllowFileAccess(true);
         webSettings.setGeolocationEnabled(true);
+        
+        // Smart Offline Caching
+        if (isNetworkAvailable()) {
+            webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        } else {
+            webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        }
         
         // Custom User Agent
         String userAgent = webSettings.getUserAgentString();
@@ -122,7 +138,9 @@ public class MainActivity extends AppCompatActivity {
                     startActivity(intent);
                     return true;
                 } catch (ActivityNotFoundException e) {
-                    return true; // Intent not found
+                    // Deep Link Fallback
+                    Toast.makeText(MainActivity.this, "Aplikasi untuk membuka tautan ini tidak terinstal.", Toast.LENGTH_SHORT).show();
+                    return true; 
                 }
             }
 
@@ -156,17 +174,29 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
-                WebView newWebView = new WebView(MainActivity.this);
-                view.addView(newWebView);
+                popupWebView = new WebView(MainActivity.this);
+                view.addView(popupWebView);
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
-                transport.setWebView(newWebView);
+                transport.setWebView(popupWebView);
                 resultMsg.sendToTarget();
                 
-                newWebView.setWebViewClient(new WebViewClient() {
+                popupWebView.setWebViewClient(new WebViewClient() {
                     @Override
                     public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                         MainActivity.this.webView.loadUrl(request.getUrl().toString());
                         return true;
+                    }
+                });
+                
+                // Handle javascript window.close() on popup
+                popupWebView.setWebChromeClient(new WebChromeClient() {
+                    @Override
+                    public void onCloseWindow(WebView window) {
+                        if (popupWebView != null) {
+                            ((ViewGroup) popupWebView.getParent()).removeView(popupWebView);
+                            popupWebView.destroy();
+                            popupWebView = null;
+                        }
                     }
                 });
                 return true;
@@ -241,6 +271,13 @@ public class MainActivity extends AppCompatActivity {
 
         // Handle File Downloads
         webView.setDownloadListener((url, userAgent1, contentDisposition, mimetype, contentLength) -> {
+            // Android 13+ JIT Notification Permission
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST_CODE);
+                }
+            }
+
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
             request.setMimeType(mimetype);
             String cookies = CookieManager.getInstance().getCookie(url);
@@ -321,7 +358,12 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (errorLayout.getVisibility() == View.VISIBLE) {
+        // Fix Popup Back-Button Trap
+        if (popupWebView != null) {
+            ((ViewGroup) popupWebView.getParent()).removeView(popupWebView);
+            popupWebView.destroy();
+            popupWebView = null;
+        } else if (errorLayout.getVisibility() == View.VISIBLE) {
             super.onBackPressed();
         } else if (webView.canGoBack()) {
             webView.goBack();
