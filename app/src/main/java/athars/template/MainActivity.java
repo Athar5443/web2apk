@@ -493,15 +493,4 @@ public class MainActivity extends AppCompatActivity {
             super.onBackPressed();
         }
     }
-}      }
-    }
-});
-        } else if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
-    }
-}      }
-    }
 }
