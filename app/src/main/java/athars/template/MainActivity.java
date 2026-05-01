@@ -6,6 +6,7 @@ import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -123,6 +124,23 @@ public class MainActivity extends AppCompatActivity {
         String userAgent = webSettings.getUserAgentString();
         webSettings.setUserAgentString(userAgent + " Web2APK-Android");
 
+        // Dark Mode Support
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            int nightModeFlags = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            if (nightModeFlags == Configuration.UI_MODE_NIGHT_YES) {
+                webSettings.setForceDark(WebSettings.FORCE_DARK_ON);
+            }
+        }
+
+        // Swipe-to-Refresh Scroll Bug Fix
+        webView.getViewTreeObserver().addOnScrollChangedListener(() -> {
+            if (webView.getScrollY() == 0) {
+                swipeRefreshLayout.setEnabled(true);
+            } else {
+                swipeRefreshLayout.setEnabled(false);
+            }
+        });
+
         // Handle target="_blank"
         webSettings.setSupportMultipleWindows(true);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
@@ -132,6 +150,30 @@ public class MainActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     return false; 
+                }
+                if (url.startsWith("intent://")) {
+                    try {
+                        Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                        if (intent != null) {
+                            PackageManager packageManager = getPackageManager();
+                            if (intent.resolveActivity(packageManager) != null) {
+                                startActivity(intent);
+                                return true;
+                            }
+                            String fallbackUrl = intent.getStringExtra("browser_fallback_url");
+                            if (fallbackUrl != null) {
+                                webView.loadUrl(fallbackUrl);
+                                return true;
+                            }
+                            Intent marketIntent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse("market://details?id=" + intent.getPackage()));
+                            if (marketIntent.resolveActivity(packageManager) != null) {
+                                startActivity(marketIntent);
+                                return true;
+                            }
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
                 try {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -284,10 +326,14 @@ public class MainActivity extends AppCompatActivity {
             request.addRequestHeader("cookie", cookies);
             request.addRequestHeader("User-Agent", userAgent1);
             request.setDescription(getString(R.string.downloading));
-            request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimetype));
+            String fileName = URLUtil.guessFileName(url, contentDisposition, mimetype);
+            if (fileName.startsWith("\"") && fileName.endsWith("\"")) {
+                fileName = fileName.substring(1, fileName.length() - 1);
+            }
+            request.setTitle(fileName);
             request.allowScanningByMediaScanner();
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(url, contentDisposition, mimetype));
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
             
             DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             if (dm != null) {
