@@ -16,6 +16,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.GeolocationPermissions;
@@ -36,6 +37,9 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private WebView popupWebView; // Tracks active popup window
+    private View customView; // Fullscreen video view
+    private WebChromeClient.CustomViewCallback customViewCallback;
     private ProgressBar progressBar;
     private SwipeRefreshLayout swipeRefreshLayout;
     private LinearLayout errorLayout;
@@ -74,6 +80,13 @@ public class MainActivity extends AppCompatActivity {
         errorLayout = findViewById(R.id.errorLayout);
         splashLayout = findViewById(R.id.splashLayout);
         btnRetry = findViewById(R.id.btnRetry);
+
+        // Apply Window Insets for Edge-to-Edge UI
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
+            androidx.core.graphics.Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            return insets;
+        });
 
         setupWebView();
 
@@ -124,8 +137,8 @@ public class MainActivity extends AppCompatActivity {
             webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         }
         
-        // Custom User Agent
-        String userAgent = webSettings.getUserAgentString();
+        // Custom User Agent to bypass Google OAuth 403 Error
+        String userAgent = webSettings.getUserAgentString().replace("; wv", "");
         webSettings.setUserAgentString(userAgent + " Web2APK-Android");
 
         // Dark Mode Support
@@ -218,6 +231,31 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (customView != null) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
+                customView = view;
+                customViewCallback = callback;
+                webView.setVisibility(View.GONE);
+                FrameLayout decorView = (FrameLayout) getWindow().getDecorView();
+                decorView.addView(customView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (customView == null) return;
+                FrameLayout decorView = (FrameLayout) getWindow().getDecorView();
+                decorView.removeView(customView);
+                customView = null;
+                customViewCallback.onCustomViewHidden();
+                webView.setVisibility(View.VISIBLE);
+                setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            }
+
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
                 popupWebView = new WebView(MainActivity.this);
@@ -436,6 +474,12 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
+        // Hide fullscreen video if active
+        if (customView != null) {
+            customViewCallback.onCustomViewHidden();
+            return;
+        }
+        
         // Fix Popup Back-Button Trap
         if (popupWebView != null) {
             ((ViewGroup) popupWebView.getParent()).removeView(popupWebView);
@@ -448,5 +492,16 @@ public class MainActivity extends AppCompatActivity {
         } else {
             super.onBackPressed();
         }
+    }
+}      }
+    }
+});
+        } else if (webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+}      }
     }
 }
