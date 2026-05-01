@@ -91,7 +91,11 @@ public class MainActivity extends AppCompatActivity {
             webView.reload();
         });
 
-        webView.loadUrl(TARGET_URL);
+        if (savedInstanceState != null) {
+            webView.restoreState(savedInstanceState);
+        } else {
+            webView.loadUrl(TARGET_URL);
+        }
     }
 
     private boolean isNetworkAvailable() {
@@ -400,6 +404,34 @@ public class MainActivity extends AppCompatActivity {
         errorLayout.setVisibility(View.VISIBLE);
         progressBar.setVisibility(View.GONE);
         swipeRefreshLayout.setRefreshing(false);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (webView != null) {
+            webView.onPause();
+            webView.pauseTimers(); // Pause JS timers and media
+        }
+        // Force sync cookies to disk to prevent session loss
+        CookieManager.getInstance().flush();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) {
+            webView.onResume();
+            webView.resumeTimers();
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (webView != null) {
+            webView.saveState(outState); // Save back history
+        }
     }
 
     @Override
