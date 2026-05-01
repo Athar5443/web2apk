@@ -37,6 +37,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.splashscreen.SplashScreen;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -53,7 +54,6 @@ public class MainActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private SwipeRefreshLayout swipeRefreshLayout;
     private LinearLayout errorLayout;
-    private LinearLayout splashLayout;
     private Button btnRetry;
     private String TARGET_URL = "{{TARGET_URL}}";
 
@@ -71,14 +71,15 @@ public class MainActivity extends AppCompatActivity {
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         setContentView(R.layout.activity_main);
 
         webView = findViewById(R.id.webview);
         progressBar = findViewById(R.id.progressBar);
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
         errorLayout = findViewById(R.id.errorLayout);
-        splashLayout = findViewById(R.id.splashLayout);
         btnRetry = findViewById(R.id.btnRetry);
 
         // Apply Window Insets for Edge-to-Edge UI
@@ -99,8 +100,7 @@ public class MainActivity extends AppCompatActivity {
         swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
 
         btnRetry.setOnClickListener(v -> {
-            errorLayout.setVisibility(View.GONE);
-            webView.setVisibility(View.VISIBLE);
+            crossfade(webView, errorLayout);
             webView.reload();
         });
 
@@ -108,6 +108,27 @@ public class MainActivity extends AppCompatActivity {
             webView.restoreState(savedInstanceState);
         } else {
             webView.loadUrl(TARGET_URL);
+        }
+    }
+
+    private void crossfade(View viewToShow, View viewToHide) {
+        viewToShow.setAlpha(0f);
+        viewToShow.setVisibility(View.VISIBLE);
+        viewToShow.animate()
+                .alpha(1f)
+                .setDuration(300)
+                .setListener(null);
+
+        if (viewToHide != null && viewToHide.getVisibility() == View.VISIBLE) {
+            viewToHide.animate()
+                    .alpha(0f)
+                    .setDuration(300)
+                    .setListener(new android.animation.AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(android.animation.Animator animation) {
+                            viewToHide.setVisibility(View.GONE);
+                        }
+                    });
         }
     }
 
@@ -206,17 +227,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                if (splashLayout.getVisibility() == View.GONE) {
-                    progressBar.setVisibility(View.VISIBLE);
-                }
-                errorLayout.setVisibility(View.GONE);
-                webView.setVisibility(View.VISIBLE);
+                progressBar.setVisibility(View.VISIBLE);
+                crossfade(webView, errorLayout);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                splashLayout.setVisibility(View.GONE);
                 progressBar.setVisibility(View.GONE);
                 swipeRefreshLayout.setRefreshing(false);
             }
@@ -290,7 +307,7 @@ public class MainActivity extends AppCompatActivity {
                 progressBar.setProgress(progress);
                 if (progress == 100) {
                     progressBar.setVisibility(View.GONE);
-                } else if (splashLayout.getVisibility() == View.GONE) {
+                } else {
                     progressBar.setVisibility(View.VISIBLE);
                 }
             }
@@ -437,9 +454,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showErrorLayout() {
-        splashLayout.setVisibility(View.GONE);
-        webView.setVisibility(View.GONE);
-        errorLayout.setVisibility(View.VISIBLE);
+        crossfade(errorLayout, webView);
         progressBar.setVisibility(View.GONE);
         swipeRefreshLayout.setRefreshing(false);
     }
