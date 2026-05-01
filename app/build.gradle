@@ -19,9 +19,9 @@ android {
     signingConfigs {
         release {
             storeFile file("keystore.jks")
-            storePassword System.getenv("KS_PASS")
-            keyAlias System.getenv("K_ALIAS")
-            keyPassword System.getenv("K_PASS")
+            storePassword project.hasProperty("KS_PASS") ? project.property("KS_PASS") : ""
+            keyAlias project.hasProperty("K_ALIAS") ? project.property("K_ALIAS") : ""
+            keyPassword project.hasProperty("K_PASS") ? project.property("K_PASS") : ""
         }
     }
 
