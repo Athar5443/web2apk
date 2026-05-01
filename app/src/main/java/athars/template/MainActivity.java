@@ -72,6 +72,12 @@ public class MainActivity extends AppCompatActivity {
         setupWebView();
         // Upfront permissions removed for JIT!
 
+        swipeRefreshLayout.setColorSchemeResources(
+            android.R.color.holo_blue_bright,
+            android.R.color.holo_green_light,
+            android.R.color.holo_orange_light,
+            android.R.color.holo_red_light
+        );
         swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
 
         btnRetry.setOnClickListener(v -> {
@@ -148,6 +154,24 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+                WebView newWebView = new WebView(MainActivity.this);
+                view.addView(newWebView);
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                transport.setWebView(newWebView);
+                resultMsg.sendToTarget();
+                
+                newWebView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                        MainActivity.this.webView.loadUrl(request.getUrl().toString());
+                        return true;
+                    }
+                });
+                return true;
+            }
+
             public void onProgressChanged(WebView view, int progress) {
                 progressBar.setProgress(progress);
                 if (progress == 100) {
